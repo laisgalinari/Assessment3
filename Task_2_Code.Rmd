@@ -1,0 +1,219 @@
+---
+title: "Data perspective: The development of educational domains for 4 to 5 years old children in Zimbabwe based on MICS6 Survey"
+output: 
+  html_document:
+    theme: simplex
+---
+
+```{r setup, include=FALSE}
+
+# Packages that are needed
+library(ggplot2)
+library(plotly)
+library(forcats)
+library(knitr)
+library(kableExtra)
+library(tidyverse) 
+library(DT)
+library(dplyr)
+library(scales)
+library(stringr)
+library(readxl)
+library(summarytools)
+library(lubridate)
+library(readr)
+library(broom)
+library(pROC)
+
+
+##### Loading data #####
+
+Zimbabwe_interview <- read_csv("Zimbabwe_children_under5_interview.csv",  
+  col_types = cols(interview_date = col_date(format = "%Y-%m-%d"), 
+                   child_birthday = col_date(format = "%Y-%m-%d")))
+
+##### Calculating age in months and filtering age of interest #####
+
+Zimbabwe_interview <- Zimbabwe_interview %>%
+  mutate (child_age_months = interval(child_birthday, interview_date) / months(1)) %>%
+  filter (child_age_months > 36 & child_age_months <= 60)
+  
+
+##### Calculating Early child development index: General and for each domain #####
+# Observation: The Index was calculated as described in Zimbabwe 2019 MICS Survey Findings Report-31012020_English page 211
+
+
+##### Recode variables to facilitate ECDI 
+
+Zimbabwe_interview <- Zimbabwe_interview %>%
+  mutate(across(c(EC6, EC7, EC8, EC9, EC11, EC12, EC13), ~ recode(., `1` = 1, `2` = 0, `8` = 0)))
+
+# EC10, EC14 and EC15 computes inversely 
+
+Zimbabwe_interview <- Zimbabwe_interview %>%
+  mutate(across(c(EC10, EC14, EC15), ~ recode(., `1` = 0, `2` = 1, `8` = 0)))
+
+
+# Calculating for each domain
+
+Zimbabwe_interview <- Zimbabwe_interview %>%
+  mutate(LITERACY = ifelse(rowSums(across(c(EC6, EC7, EC8))) >= 2, 1, 0)) %>%
+  mutate(PHYSICAL = ifelse(rowSums(across(c(EC9, EC10))) >= 1, 1, 0)) %>%
+  mutate(LEARNING = ifelse(rowSums(across(c(EC11, EC12))) >= 1, 1, 0)) %>%
+  mutate(SOCIAL_EMOCIONAL = ifelse(rowSums(across(c(EC13, EC14, EC15))) >= 2, 1, 0))
+
+# Early child development index (ECDI)
+
+Zimbabwe_interview <- Zimbabwe_interview %>% 
+  mutate(ECDI = ifelse(rowSums(across(c(LITERACY, PHYSICAL, LEARNING, SOCIAL_EMOCIONAL))) >= 3, 1, 0))
+
+#### Identifying proportion of children with on-track index by age in months ####
+
+table_prop <- Zimbabwe_interview %>%
+  mutate(child_age_months = round(child_age_months)) %>%
+  group_by(child_age_months) %>%
+  summarise(N_CHILDREN = n(),
+            PROP_ECDI = sum(ECDI)/n(), 
+            PROP_LITERACY = sum(LITERACY)/n(),
+            PROP_PHYSICAL = sum(PHYSICAL)/n(), 
+            PROP_LEARNING = sum(LEARNING)/n(),
+            PROP_SOCIAL_EMOCIONAL = sum(SOCIAL_EMOCIONAL)/n(),
+            )
+
+
+# DO NOT FORGET: Call renv::snapshot() to save state of the project library to the lockfile
+
+
+```
+
+### Contextualization: Why is this important?
+
+Four to five years old children are in the phase of human development known as Early Childhood. Through decades, studies have been showing that this phase is a critical stage of development, in which are expected acquisitions in diverse domains, as motor, cognitive, language and socioemotional aspects[^1]. An appropriated development in this stage predicts success later in life in multiple areas and for this reason, studies analyzing human capital have shown that early childhood educational investments have a positive long-term return for society[^2]. Furthermore, specialists indicates that the early childhood development is a foundation for sustainable development and has a close relation to several SDGs targets (as targets in SDG 1, 2, 3, 4, 5, 6 and 16)[^3]. The intense transformation that occurs in early childhood is in part explained due to biological aspects, but the proper development relies on social support and access to rights[^4]. So, monitoring developmental education dimensions for children on this stage is central to access to rights and countries capacity building.
+
+[^1]: United Nations Children's Fund (UNICEF). Early Childhood Development (2023). UNICEF Vision for Every Child. Available on: [https://www.unicef.org/media/145336/file/Early%20Childhood%20Development%20-%20UNICEF%20Vision%20for%20Every%20Child.pdf](LINK).
+
+[^2]: Center on the Developing Child (2007). *The Science of Early Childhood Development* (InBrief). Available on: [https://harvardcenter.wpenginepowered.com/wp-content/uploads/2007/03/InBrief-The-Science-of-Early-Childhood-Development2.pdf](LINK).
+
+[^3]: United Nations Children's Fund (UNICEF). Early Childhood Development (2023). UNICEF Vision for Every Child. Available on: [https://www.unicef.org/media/145336/file/Early%20Childhood%20Development%20-%20UNICEF%20Vision%20for%20Every%20Child.pdf](LINK).
+
+[^4]: Britto, P., et al. (2017) Nurturing care: promoting early childhood development. The Lancet. Advancing Early Childhood Development: from Science to Scale. Available on: [https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31390-3/abstract#%20](LINK).
+
+### Data perspective: How was it done?
+
+**This Data Perspective aims to analyze how educational domains evolved for 4 to 5 years old children in Zimbabwe based on MICS6 Survey (2019) data.**
+
+In early childhood development subject, one year is a long period of time. So, the children age was analyzed in months. It was examined data from `r Zimbabwe_interview %>% nrow()` children. Composed by `r Zimbabwe_interview %>% filter (child_age_months < 48) %>% nrow()` children with more than 36 months old up to 48 months old (incomplete 4 years old, in the fourth year of life) and `r Zimbabwe_interview %>% filter (child_age_months >= 48) %>% nrow()` children with more than 48 months old up to 60 months old (incomplete 5 years old, in the fifth year of life). It was analyzed 5 domains from the Mother/Caregiver interview for children under 5, as shown in Table 1. Those domains have a multidimensional perspective on development/ educational aspects and consider milestones that children are expected to achieve by these ages. The domains were analyzed following the MICS6 criteria to be considered on/off track[^5], also as shown in Table 1. It was calculated the proportion of children developmentally on track for each domain by their age in months. Besides, it was conducted a logistic regression analysis to identify if age in months increased the odds for the child to be developmentally on track for the general domain (ECDI).
+
+[^5]: For more information, see MICS6 Zimbabwe report, available on: <https://mics-surveys-prod.s3.amazonaws.com/MICS6/Eastern%20and%20Southern%20Africa/Zimbabwe/2019/Survey%20findings/Zimbabwe%202019%20MICS%20Survey%20Findings%20Report-31012020_English.pdf>.
+
+###### **Table 1. Educational domains, criteria to be developmentally on track and definition**
+
+| Educational domains                      | Criteria to be developmentally on track and definition                                                                                                                                                       |
+|------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Literacy-numeracy**                    | *At least two of three are true*: Can identify/name at least ten letters of the alphabet; Can read at least four simple, popular words; Know the name and recognize the symbols of all numbers from 1 to 10. |
+| **Physical**                             | *At least one of two are true*: Can pick up a small object with two fingers, like a stick or a rock from the ground; Does not indicate that the child is sometimes too sick to play.                         |
+| **Learning**                             | *At least one of two are true*: Child follows simple directions on how to do something correctly; When given something to do, is able to do it independently.                                                |
+| **Social-emotional**                     | *At least two of three are true*: The child gets along well with other children; The child does not kick, bite, or hit other children; The child does not get distracted easily.                             |
+| **Early child development index (ECDI)** | It is considered that the child is developmentally on track if scores *at least three of four domains*.                                                                                                      |
+
+### Results: What the data shows?
+
+Based on Figure 1, in general, it was not possible to observe a straightforward tendency that older children are proportionally more developmentally on track. Although it was expected a higher proportion of children on track as age increased due to developmental aspects, this was not clearly observed. It is only possible to observe an increase in proportion on track for the Literacy/Numeracy, but it also stands out the low proportion of children on track in this dimension, even among the older ones (close to 20%). Furthermore, the proportion of children on track for social-emotional and ECDI across all ages could also be a concern.
+
+###### **Figure 1. Proportion of children on-track by age in months**
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10}
+
+
+
+a <- table_prop %>%
+  filter(!is.na(child_age_months)) %>%
+  rename ("Age (in months)" = "child_age_months") %>%
+  rename("ECDI" = "PROP_ECDI", "Literacy/Numeracy" = "PROP_LITERACY", 
+               "Physical" = "PROP_PHYSICAL", "Learning" = "PROP_LEARNING", 
+               "Social-Emotional" = "PROP_SOCIAL_EMOCIONAL") %>%
+   
+  pivot_longer(cols = c(`ECDI`, `Literacy/Numeracy`, `Physical`, `Learning`, `Social-Emotional`,),
+               names_to = "PROP_TYPE", values_to = "Proportion on track") %>%
+  ggplot(aes(x = `Age (in months)`, y = `Proportion on track`, color = PROP_TYPE, group = PROP_TYPE)) +
+  geom_line(size = 1.1) +
+  scale_color_manual(
+    values = c("ECDI" = "#1f77b4", "Literacy/Numeracy" = "#ff7f0e", 
+               "Physical" = "#2ca02c", "Learning" = "#d62728", 
+               "Social-Emotional" = "#9467bd")) +
+  scale_y_continuous(labels = scales::percent_format(), limits = c(0, 1)) +
+  theme_minimal() +
+  labs(x = "Child Age (Months)", y = "Proportion of children on-track (%)", color = "") +
+  theme(legend.title = element_text(size = 10), 
+        legend.text = element_text(size = 8),
+        panel.grid.major.x = element_blank(), 
+        panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank()) +
+  geom_hline(yintercept = 0, linewidth = 1, colour = "#333333")
+
+
+
+ggplotly(a, tooltip = c("x", "y"))
+
+
+```
+
+The logistics regression results indicates that there was no evidence that age in months could increase the odds for the child to be developmentally on track in ECDI (OR 1.02; CI 1.01 - 1.04; AUC 0.55). An Odds Ratio (OR) close to 1 means that the variable is not capable of influencing the outcome and an Area Under the Curve (AUC) close to 0.5 means that age was not capable of correct classifying on-track/off-track children. The result is consistent with what was observed in the figure.
+
+###### **Table 2. Logistic regression results**
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+# Renaming child_age_months to present in results table and removing NA to calculate ROC curve and AUC
+
+Zimbabwe_interview_model <- Zimbabwe_interview %>%
+  rename(Age = child_age_months) %>%
+  filter(!is.na(ECDI) & !is.na(Age))
+
+# Logistic regression
+model_ECDI <- glm(ECDI ~ Age, data = Zimbabwe_interview_model, family = "binomial")
+
+# Summary model
+summary_model <- summary(model_ECDI)
+
+summary_df <- as.data.frame(summary_model$coefficients)
+
+# ODDS Ratio and confidence interval 
+
+odds_ratios <-exp(coef(model_ECDI))
+conf_int <- exp(confint(model_ECDI))
+
+# p values
+p_values <- summary_model$coefficients[, "Pr(>|z|)"]
+
+# Table with results reporting OR
+
+results <- data.frame(
+   OR = round(odds_ratios, 4),
+   `CI(Inf)` = round(c(conf_int[1, 1], conf_int[2, 1]), 4),
+   `CI(Sup)` = round(c(conf_int[1, 2], conf_int[2, 2]), 4),
+  p = sprintf("%.3f", p_values)
+)
+
+
+# Formatting results
+kable(results, format = "html") %>%
+kable_classic(full_width = F, html_font = "Arial")
+
+
+# ROC curve
+roc_result <- roc(Zimbabwe_interview_model$ECDI, model_ECDI$fitted.values)
+
+
+# Area under the curve
+
+AUC <- auc(roc_result)
+
+
+```
+
+### Implications and final thoughts
+
+The results point out that although it is expected that children have significant improvements across those months, this was not identified. This is especially worrying for children at the end of their fifth year of life, as they haven't achieved the expected acquisitions. Besides, an import part of children was not developmentally on track in ECDI, Social-Emotional and Literacy/Numeracy. These evidence reveals the need to improve education policies for children at this age.
+
+It is also interesting to notice that most part of the children are on-track in the Learning domain (that asses the capability to learn) and off-track for Literacy/Numeracy (that asses academic learning). This may indicate specially the necessity to strengthen access to academic skills stimulation (like access to books, learning & education toys) and educational policies (like access to high quality primary school/ daycare and supporting caregivers to improve children education).

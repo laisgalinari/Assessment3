@@ -1,0 +1,164 @@
+---
+title: "SDG under-five mortality status and birth health services"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+# Open packages needed for analysis
+library(flexdashboard)
+library(ggplot2)
+library(plotly)
+library(forcats)
+library(knitr)
+library(kableExtra)
+library(tidyverse) 
+library(DT)
+library(dplyr)
+library(scales)
+library(stringr)
+library(readxl)
+library(summarytools)
+library(lubridate)
+library(readr)
+
+######################################################################
+########################## 1. DATA PREPARATION ##########################
+######################################################################
+
+
+############## a) Loading data and selecting variables ##############
+
+
+# Loading UNICEF indicators data, selecting variables of interest and renaming columns to use more friendly names
+
+UNICEF_DATA <- read_csv("fusion_GLOBAL_DATAFLOW_UNICEF_1.0_.MNCH_ANC4+MNCH_SAB..csv") %>%
+  
+  select(`REF_AREA:Geographic area`, `INDICATOR:Indicator`, `TIME_PERIOD:Time period`, `OBS_VALUE:Observation Value`) %>%
+  
+  rename(REF_AREA = `REF_AREA:Geographic area`,
+         INDICATOR = `INDICATOR:Indicator`, 
+         TIME_PERIOD = `TIME_PERIOD:Time period`,
+         OBS_VALUE = `OBS_VALUE:Observation Value`) %>%
+  # Splitting REF_AREA in country name and ISO3Code
+  separate(REF_AREA, into = c("ISO3Code", "COUNTRY"), sep = ": ") %>%
+  separate (INDICATOR, into = c("IND_ABBREV", "INDICATOR"), sep = ": ")%>%
+ filter(nchar(ISO3Code) == 3) # Filtering countries using ISO3Code (Regions have more than 3 characters)
+  
+
+### Filtering more recent information 
+
+UNICEF_DATA <- UNICEF_DATA %>%
+group_by(COUNTRY, IND_ABBREV) %>%
+filter(TIME_PERIOD == max(TIME_PERIOD)) %>%
+ungroup()
+
+
+# Loading on-track and off-track countries
+TRACK_STATUS <- read_excel("On-track and off-track countries.xlsx")  %>%
+  
+  # Creating on-track/ off-track indicator
+mutate(TRACK = case_when(Status.U5MR %in% c("Achieved", "On Track") ~ "On-Track",
+Status.U5MR %in% c("Acceleration Needed") ~ "Off-Track"))
+
+# Loading demographic indicators data, selecting variables of interest and renaming columns to use more friendly names
+
+
+DEMOGRAPHIC_INDICATORS_PROJ <- read_excel("WPP2022_GEN_F01_DEMOGRAPHIC_INDICATORS_COMPACT_REV1.xlsx", sheet = "Projections", skip = 16) %>% # Defining sheet and skip lines in spreadsheet that are introductory and do not belong to the database
+  
+  select(`Region, subregion, country or area *`, `Year`, `Births (thousands)`, `Type`) %>%
+  
+  rename(COUNTRY = `Region, subregion, country or area *`,
+         YEAR = `Year`, 
+         BIRTHS = `Births (thousands)`, 
+         TYPE = `Type`) %>%
+  #Filtering information of interest 
+
+  filter(TYPE %in% "Country/Area") %>%
+  filter (YEAR %in% c("2022"))
+
+
+############## b) Merging data ##############
+
+DATA_MERGED <- UNICEF_DATA %>%
+left_join(TRACK_STATUS %>% select(ISO3Code, TRACK), by = "ISO3Code", multiple = "all") %>%
+left_join(DEMOGRAPHIC_INDICATORS_PROJ, by = "COUNTRY", multiple = "all")
+
+############## c) Calculating population-weighted coverage ##############
+
+# Calculating COVERAGE by country
+
+DATA_MERGED <- DATA_MERGED %>%
+  mutate(BIRTHS = as.numeric(BIRTHS)) %>%
+  mutate (OBS_VALUE = OBS_VALUE/100) %>%
+  mutate(COVERAGE_C = (OBS_VALUE*BIRTHS)) 
+
+# Calculating population-weighted coverage on-track/ off-track for each indicator
+
+# It was not identified births values for United States (NA). So, they are removed for conducting analysis using [filter(!is.na(BIRTHS))] as follows
+
+RESULTS <- DATA_MERGED %>%
+  filter(!is.na(BIRTHS)) %>%
+  select(IND_ABBREV, INDICATOR, TRACK, COVERAGE_C, BIRTHS) %>%
+  group_by(TRACK, IND_ABBREV, INDICATOR) %>%
+  summarise(
+    SUM_COVERAGE_C = sum(COVERAGE_C),
+    SUM_BIRTHS = sum (BIRTHS),
+    COVERAGE_W = (SUM_COVERAGE_C/SUM_BIRTHS)
+    ) 
+
+# DO NOT FORGET: Call renv::snapshot() to save state of the project library to the lockfile
+
+
+```
+
+## Column {.width = 250}
+
+##### Under 5 mortality and health services
+
+-   The SDG 3.2 aims to end preventable deaths of newborns and children under 5 years of age by 2030. The United Nations Inter-agency group for Child Mortality Estimation (UN IGME) provides a classification that indicates countries that are on-track or off-track to achieve this target.
+
+-   Were identified `r TRACK_STATUS %>% filter(TRACK %in% "On-Track") %>% nrow()` countries/areas on-track and `r TRACK_STATUS %>% filter(TRACK %in% "Off-Track") %>% nrow()` countries/areas off-track to achieve this goal. Scientific literature suggests that [antenatal care](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6743758/ "The impact of antenatal care on neonatal mortality in sub-Saharan Africa: A systematic review and meta-analysis") and [skilled birth attendant](https://link.springer.com/article/10.1007/s10995-013-1260-7 "A Regional Multilevel Analysis: Can Skilled Birth Attendants Uniformly Decrease Neonatal Mortality?") could be strategic health services to prevent under-five mortality.
+
+-   **Data indicates that countries off-track also have a lower population-weighted coverage of births with antenatal care and skilled birth attendant.** This data combined with literature reviews may suggest that actions to strengthen these health services could enhance the achievement of SDG 3.2.
+
+##### Caveats
+
+-   Despite the hypothesis, data itself does not allow casual inference. For example, studies also indicates a complex [relation between antenatal care/ skilled birth attendant](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9778501/ "Receiving quality antenatal care service increases the chance of maternal use of skilled birth attendants in Ethiopia: Using a longitudinal panel survey") and [differential effects depending on region](https://link.springer.com/article/10.1007/s10995-013-1260-7 "A Regional Multilevel Analysis: Can Skilled Birth Attendants Uniformly Decrease Neonatal Mortality?").
+
+-   Data used for analysis: The on/off track classification was based on data provided by UN IGME. To estimate population-weighted coverage were used data on projected births for 2022 for each country by UN World Population Prospects linked with most recent UNICEF Global Data for health services (2018 to 2022).
+
+## Column
+
+### Estimated population-weighted coverage of births with antenatal care and skilled birth attendant for countries on-track/off-track for SDG under-five mortality
+
+```{r, fig.width=9}
+
+RESULTS %>%  
+  filter(!is.na(TRACK)) %>%
+   ggplot(aes(x = IND_ABBREV, y = COVERAGE_W, fill = TRACK)) +
+  geom_col(position = position_dodge(width = 1), width = 0.8) + 
+    coord_flip()+
+      theme_minimal() +
+      geom_hline(yintercept = 0, linewidth = 1, colour = "#333333") +
+      theme(
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.text.y = element_text(size = 11, color = "black"),
+        panel.grid.major.y = element_blank(), 
+        panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank() 
+      )+
+  scale_y_continuous(labels = NULL) +
+  labs(x = "",
+       y = "",
+       fill = "") +
+  geom_text(aes(label = paste0(comma(COVERAGE_W*100, scale = 1), "%")), 
+            position = position_dodge(width = 1), hjust = 1,
+             size = 4, color = "black") +
+  scale_fill_manual(
+    values = c("Off-Track" = "#1cabe2", "On-Track" = "#99c2a2")) +
+  scale_x_discrete(labels = c("MNCH_ANC4" = "Antenatal care (4+ visits)", "MNCH_SAB" = "Skilled birth attendant"))
+
+```
