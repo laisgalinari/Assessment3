@@ -6,7 +6,7 @@ All analysis and writting were performed in Rstudio using RMarkDown. Subsequentl
 
 - *Assessment3*: R project.
 - *Task_1_Code*: Rmd file with Task 1 code.
--  *Task_1_Result*: HTML file with Task 1 results and visualization strategy.
+-  *Task_1_Code_Result*: HTML file with Task 1 results and visualization strategy.
 -  *Task_2_Code*: Rmd file with Task 2 code.
 -  *Task_2_Data_Perspective_Report*: HTML file with task 2 reporting Data Perspective, as instructed. 
 
