@@ -128,7 +128,7 @@ RESULTS <- DATA_MERGED %>%
 
 -   Despite the hypothesis, data itself does not allow casual inference. For example, studies also indicates a complex [relation between antenatal care/ skilled birth attendant](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9778501/ "Receiving quality antenatal care service increases the chance of maternal use of skilled birth attendants in Ethiopia: Using a longitudinal panel survey") and [differential effects depending on region](https://link.springer.com/article/10.1007/s10995-013-1260-7 "A Regional Multilevel Analysis: Can Skilled Birth Attendants Uniformly Decrease Neonatal Mortality?").
 
--   Data used for analysis: The on/off track classification was based on data provided by UN IGME. To estimate population-weighted coverage were used data on projected births for 2022 for each country by UN World Population Prospects linked with most recent UNICEF Global Data for health services (2018 to 2022).
+-   Data used for analysis: The on/off track classification was based on data provided by UN IGME. To estimate population-weighted coverage were used data on projected births for 2022 for each country by UN World Population Prospects linked with most recent UNICEF Global Data for health services (2018 to 2022). One important limitation is that antenatal care data was available for `r DATA_MERGED %>% filter(IND_ABBREV %in% "MNCH_ANC4") %>% select(ISO3Code) %>% unique() %>% nrow()` countries and skilled birth data was available for `r DATA_MERGED %>% filter(IND_ABBREV %in% "MNCH_SAB") %>% select(ISO3Code) %>% unique() %>% nrow()` countries. 
 
 ## Column
 
